@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Truck Display</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Truck">
+<meta name="theme-color" content="#0b0c0b">
+<style>
+  :root { --e: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; background: #0b0c0b; color: #fff; overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif; }
+  body { position: fixed; inset: 0; -webkit-user-select: none; user-select: none; }
+
+  /* ---------- background ---------- */
+  #bg { position: fixed; inset: -8%; background: #0b0c0b url("topo.webp") center / cover no-repeat;
+    animation: drift 90s ease-in-out infinite alternate; will-change: transform; }
+  @keyframes drift {
+    0%   { transform: scale(1.12) translate3d(-2.5%, -1.5%, 0); }
+    100% { transform: scale(1.22) translate3d(2.5%, 1.5%, 0); }
+  }
+  #shade { position: fixed; inset: 0;
+    background: radial-gradient(ellipse at 70% 50%, rgba(8,9,8,.35), rgba(8,9,8,.78) 85%);
+  }
+  #glow { position: fixed; inset: 0; background: radial-gradient(ellipse at 22% 70%, rgba(255,255,255,.10), transparent 60%);
+    opacity: calc(var(--e) * 1); pointer-events: none; }
+
+  /* ---------- main layout ---------- */
+  #app { position: fixed; inset: 0; display: none; padding: max(4vh, env(safe-area-inset-top)) 5vw max(4vh, env(safe-area-inset-bottom)) 5vw;
+    grid-template-columns: 36% 1fr; grid-template-rows: 1fr auto; column-gap: 5vw; row-gap: 2.5vh; }
+  body.ready #app { display: grid; }
+
+  #left { display: flex; flex-direction: column; justify-content: center; gap: 2.4vh; min-width: 0; }
+  #art { width: min(100%, 46vh); aspect-ratio: 1; border-radius: 1.6vh; background: #1a1b1a center / cover no-repeat;
+    box-shadow: 0 2vh 6vh rgba(0,0,0,.6); }
+  #meta { min-width: 0; width: min(100%, 46vh); }
+  #title { font-size: 3.6vh; font-weight: 700; line-height: 1.15; letter-spacing: -.01em;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  #artist { margin-top: .7vh; font-size: 2.6vh; color: rgba(255,255,255,.66); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #bars { display: flex; align-items: flex-end; gap: .55vh; height: 9vh; width: min(100%, 46vh); }
+  #bars i { flex: 1; height: 100%; background: linear-gradient(to top, rgba(255,255,255,.95), rgba(255,255,255,.35));
+    border-radius: .5vh; transform-origin: bottom; transform: scaleY(.05); will-change: transform; }
+
+  #lyricsWrap { position: relative; min-height: 0; overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18%, #000 82%, transparent 100%);
+            mask-image: linear-gradient(to bottom, transparent 0, #000 18%, #000 82%, transparent 100%); }
+  #lyrics { position: absolute; left: 0; right: 0; top: 0; transition: transform .55s cubic-bezier(.22,.8,.3,1); will-change: transform; }
+  .ln { font-size: 5.2vh; font-weight: 800; line-height: 1.18; letter-spacing: -.015em; padding: 1.1vh 0;
+    color: rgba(255,255,255,.28); transform-origin: left center; transition: color .35s, transform .35s;
+    transform: scale(.94); }
+  .ln.on { color: #fff; transform: scale(1); }
+  .ln.past { color: rgba(255,255,255,.2); }
+  #nolyrics { position: absolute; inset: 0; display: none; align-items: center; justify-content: flex-start;
+    font-size: 3vh; color: rgba(255,255,255,.4); font-weight: 600; }
+  body.nolyr #nolyrics { display: flex; }
+  body.nolyr #lyrics { display: none; }
+
+  /* ---------- bottom progress ---------- */
+  #foot { grid-column: 1 / -1; display: flex; align-items: center; gap: 2vw; }
+  .t { font-size: 2.2vh; color: rgba(255,255,255,.6); font-variant-numeric: tabular-nums; min-width: 6.5vh; }
+  .t.r { text-align: right; }
+  #track { flex: 1; height: .8vh; background: rgba(255,255,255,.16); border-radius: 1vh; overflow: hidden; }
+  #fill { height: 100%; width: 0; background: #fff; border-radius: 1vh; }
+  #nudge { display: flex; align-items: center; gap: 1vh; opacity: .35; }
+  #nudge button { background: rgba(255,255,255,.12); color: #fff; border: 0; border-radius: 1vh;
+    width: 5vh; height: 4.4vh; font-size: 2.4vh; font-weight: 700; }
+  #nudge span { font-size: 1.9vh; min-width: 7vh; text-align: center; color: #fff; font-variant-numeric: tabular-nums; }
+
+  /* ---------- setup / status screens ---------- */
+  #setup { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 5vh 6vw; }
+  body.ready #setup { display: none; }
+  .card { width: min(760px, 100%); background: rgba(14,15,14,.82); border: 1px solid rgba(255,255,255,.12);
+    border-radius: 2vh; padding: 4vh 4vw; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  .card h1 { font-size: 3.6vh; margin-bottom: 1.4vh; }
+  .card p { font-size: 2.2vh; line-height: 1.45; color: rgba(255,255,255,.72); margin-bottom: 2vh; }
+  .card label { display: block; font-size: 1.9vh; color: rgba(255,255,255,.55); margin-bottom: .8vh; }
+  .card input, .card code { width: 100%; display: block; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.16);
+    color: #fff; border-radius: 1.2vh; padding: 1.6vh 1.6vw; font-size: 2.1vh; margin-bottom: 2.2vh; word-break: break-all;
+    -webkit-user-select: text; user-select: text; font-family: ui-monospace, Menlo, monospace; }
+  .card button { background: #fff; color: #000; border: 0; border-radius: 1.2vh; padding: 1.8vh 2.6vw; font-size: 2.3vh; font-weight: 700; }
+  #err { color: #ff8a80; font-size: 2vh; margin-top: 1.6vh; min-height: 2.4vh; }
+</style>
+</head>
+<body>
+<div id="bg"></div><div id="shade"></div><div id="glow"></div>
+
+<div id="setup">
+  <div class="card" id="setupCard">
+    <h1>Connect Spotify</h1>
+    <p id="setupText">Paste your Spotify Client ID, then tap Connect.</p>
+    <label for="cid">Client ID</label>
+    <input id="cid" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="32 characters">
+    <label>Redirect URI (paste this exact address in the Spotify dashboard)</label>
+    <code id="ruri"></code>
+    <button id="connect">Connect Spotify</button>
+    <div id="err"></div>
+  </div>
+</div>
+
+<div id="app">
+  <div id="left">
+    <div id="art"></div>
+    <div id="meta"><div id="title">Nothing playing</div><div id="artist">&nbsp;</div></div>
+    <div id="bars"></div>
+  </div>
+  <div id="lyricsWrap">
+    <div id="lyrics"></div>
+    <div id="nolyrics">No synced lyrics for this song</div>
+  </div>
+  <div id="foot">
+    <div class="t" id="tc">0:00</div>
+    <div id="track"><div id="fill"></div></div>
+    <div class="t r" id="td">0:00</div>
+    <div id="nudge"><button id="nm">−</button><span id="nv">sync 0.0s</span><button id="np">+</button></div>
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+
+/* ---------- small helpers ---------- */
+const $ = id => document.getElementById(id);
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return mem[k] || null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) { mem[k] = v; } },
+  del(k) { try { localStorage.removeItem(k); } catch (e) { delete mem[k]; } }
+};
+const mem = {};
+const params = new URLSearchParams(location.search);
+const DEMO = params.has("demo");
+const REDIRECT = location.origin + location.pathname;
+const SCOPES = "user-read-currently-playing user-read-playback-state";
+const fmt = ms => { ms = Math.max(0, ms | 0); const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+
+/* ---------- auth (Spotify PKCE, no secret needed) ---------- */
+const b64url = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const rand = n => { const a = new Uint8Array(n); crypto.getRandomValues(a); return b64url(a); };
+
+async function startLogin(clientId) {
+  const verifier = rand(64);
+  const challenge = b64url(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
+  store.set("td_verifier", verifier);
+  store.set("td_client", clientId);
+  const q = new URLSearchParams({ client_id: clientId, response_type: "code", redirect_uri: REDIRECT,
+    code_challenge_method: "S256", code_challenge: challenge, scope: SCOPES });
+  location.href = "https://accounts.spotify.com/authorize?" + q;
+}
+async function tokenRequest(body) {
+  const r = await fetch("https://accounts.spotify.com/api/token", { method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(body) });
+  if (!r.ok) throw new Error("token " + r.status);
+  const j = await r.json();
+  const t = { access: j.access_token, refresh: j.refresh_token || (JSON.parse(store.get("td_tok") || "{}").refresh), exp: Date.now() + j.expires_in * 1000 };
+  store.set("td_tok", JSON.stringify(t));
+  return t;
+}
+async function handleCallback(code) {
+  return tokenRequest({ grant_type: "authorization_code", code, redirect_uri: REDIRECT,
+    client_id: store.get("td_client"), code_verifier: store.get("td_verifier") });
+}
+let tok = null;
+async function getToken(force) {
+  if (!tok) { try { tok = JSON.parse(store.get("td_tok") || "null"); } catch (e) { tok = null; } }
+  if (!tok) return null;
+  if (force || Date.now() > tok.exp - 60000) {
+    try { tok = await tokenRequest({ grant_type: "refresh_token", refresh_token: tok.refresh, client_id: store.get("td_client") }); }
+    catch (e) { return null; }
+  }
+  return tok.access;
+}
+
+/* ---------- Spotify now-playing ---------- */
+async function fetchNow() {
+  let t = await getToken();
+  if (!t) throw new Error("auth");
+  let r = await fetch("https://api.spotify.com/v1/me/player/currently-playing?additional_types=episode", { headers: { Authorization: "Bearer " + t } });
+  if (r.status === 401) { t = await getToken(true); if (!t) throw new Error("auth");
+    r = await fetch("https://api.spotify.com/v1/me/player/currently-playing?additional_types=episode", { headers: { Authorization: "Bearer " + t } }); }
+  if (r.status === 204) return null;
+  if (r.status === 429) return undefined;           // rate limited: keep what we have
+  if (!r.ok) return undefined;
+  const j = await r.json();
+  if (!j || !j.item) return null;
+  const it = j.item;
+  const isTrack = it.type === "track";
+  const imgs = (isTrack ? it.album : it.show || {}).images || it.images || [];
+  return {
+    id: it.id, title: it.name,
+    artist: isTrack ? it.artists.map(a => a.name).join(", ") : ((it.show && it.show.name) || ""),
+    album: isTrack ? it.album.name : "",
+    dur: it.duration_ms, art: (imgs[0] || {}).url || "",
+    progress: j.progress_ms || 0, playing: !!j.is_playing, isTrack
+  };
+}
+
+/* ---------- lyrics (LRCLIB, synced) ---------- */
+const lyricCache = new Map();
+function parseLRC(txt) {
+  const out = [];
+  for (const raw of txt.split("\n")) {
+    const m = raw.match(/^\s*((?:\[\d+:\d+(?:\.\d+)?\])+)\s*(.*)$/);
+    if (!m) continue;
+    const text = m[2].trim();
+    for (const tm of m[1].match(/\[(\d+):(\d+(?:\.\d+)?)\]/g)) {
+      const mm = tm.match(/\[(\d+):(\d+(?:\.\d+)?)\]/);
+      out.push({ t: (parseInt(mm[1], 10) * 60 + parseFloat(mm[2])) * 1000, text });
+    }
+  }
+  return out.sort((a, b) => a.t - b.t);
+}
+const clean = s => s.replace(/\s*[-–]\s*(\d{4}\s*)?(remaster(ed)?|live|mono|stereo|single version|radio edit|bonus track).*$/i, "")
+                    .replace(/\s*[\(\[]\s*(feat|ft|with)\.?[^\)\]]*[\)\]]/i, "").trim();
+async function getLyrics(tr) {
+  if (lyricCache.has(tr.id)) return lyricCache.get(tr.id);
+  const first = tr.artist.split(",")[0].trim();
+  let lines = null;
+  const tries = [
+    { track_name: clean(tr.title), artist_name: first, album_name: tr.album, duration: Math.round(tr.dur / 1000) },
+    { track_name: clean(tr.title), artist_name: first, duration: Math.round(tr.dur / 1000) }
+  ];
+  for (const q of tries) {
+    try {
+      const r = await fetch("https://lrclib.net/api/get?" + new URLSearchParams(q));
+      if (r.ok) { const j = await r.json(); if (j.syncedLyrics) { lines = parseLRC(j.syncedLyrics); break; } }
+    } catch (e) {}
+  }
+  if (!lines || !lines.length) {
+    try {
+      const r = await fetch("https://lrclib.net/api/search?" + new URLSearchParams({ track_name: clean(tr.title), artist_name: first }));
+      if (r.ok) {
+        const arr = (await r.json()).filter(x => x.syncedLyrics);
+        arr.sort((a, b) => Math.abs(a.duration * 1000 - tr.dur) - Math.abs(b.duration * 1000 - tr.dur));
+        if (arr[0] && Math.abs(arr[0].duration * 1000 - tr.dur) < 6000) lines = parseLRC(arr[0].syncedLyrics);
+      }
+    } catch (e) {}
+  }
+  if (lines && lines.length) lines = lines.map(l => ({ t: l.t, text: l.text || "♪" }));
+  else lines = null;
+  lyricCache.set(tr.id, lines);
+  if (lyricCache.size > 60) lyricCache.delete(lyricCache.keys().next().value);
+  return lines;
+}
+
+/* ---------- UI state ---------- */
+const S = { track: null, lines: null, active: -1, base: 0, stamp: 0, playing: false, offset: 0, lyricsFor: null };
+const els = { title: $("title"), artist: $("artist"), art: $("art"), lyrics: $("lyrics"), wrap: $("lyricsWrap"),
+  fill: $("fill"), tc: $("tc"), td: $("td"), nv: $("nv") };
+
+function showReady() { document.body.classList.add("ready"); }
+function renderLyrics(lines) {
+  els.lyrics.innerHTML = "";
+  S.active = -1;
+  if (!lines) { document.body.classList.add("nolyr"); return; }
+  document.body.classList.remove("nolyr");
+  const f = document.createDocumentFragment();
+  lines.forEach((l, i) => { const d = document.createElement("div"); d.className = "ln"; d.textContent = l.text; f.appendChild(d); });
+  els.lyrics.appendChild(f);
+  els.lyrics.style.transition = "none";
+  els.lyrics.style.transform = "translateY(" + (els.wrap.clientHeight * 0.38) + "px)";
+  void els.lyrics.offsetHeight;
+  els.lyrics.style.transition = "";
+}
+function applyTrack(tr) {
+  const changed = !S.track || !tr || S.track.id !== tr.id;
+  S.track = tr;
+  if (!tr) {
+    els.title.textContent = "Nothing playing"; els.artist.innerHTML = "&nbsp;";
+    els.art.style.backgroundImage = ""; S.lines = null; S.lyricsFor = null; renderLyrics(null);
+    document.body.classList.remove("nolyr"); els.lyrics.innerHTML = ""; return;
+  }
+  if (changed) {
+    els.title.textContent = tr.title; els.artist.textContent = tr.artist;
+    els.art.style.backgroundImage = tr.art ? 'url("' + tr.art + '")' : "";
+    S.offset = 0; updateNudge();
+    S.lines = null; S.lyricsFor = tr.id;
+    renderLyrics(null); els.lyrics.innerHTML = "";
+    document.body.classList.remove("nolyr");
+    if (tr.isTrack) getLyrics(tr).then(lines => {
+      if (S.lyricsFor !== tr.id) return;
+      S.lines = lines; renderLyrics(lines);
+    });
+    else document.body.classList.add("nolyr");
+  }
+}
+function updateNudge() { els.nv.textContent = "sync " + (S.offset >= 0 ? "+" : "") + (S.offset / 1000).toFixed(1) + "s"; }
+$("nm").onclick = () => { S.offset -= 500; updateNudge(); };
+$("np").onclick = () => { S.offset += 500; updateNudge(); };
+
+function pos() { return S.base + (S.playing ? performance.now() - S.stamp : 0); }
+function setPos(progress, playing) {
+  const cur = pos();
+  if (!S.playing !== !playing || Math.abs(cur - progress) > 450) { S.base = progress; S.stamp = performance.now(); }
+  else if (!playing) { S.base = progress; S.stamp = performance.now(); }
+  S.playing = playing;
+  if (!playing) { S.base = progress; S.stamp = performance.now(); }
+}
+function updateLyricPos(ms) {
+  const lines = S.lines; if (!lines) return;
+  const t = ms + S.offset + 150;          // tiny lead so the line lights as it's sung
+  let lo = 0, hi = lines.length - 1, idx = -1;
+  while (lo <= hi) { const mid = (lo + hi) >> 1; if (lines[mid].t <= t) { idx = mid; lo = mid + 1; } else hi = mid - 1; }
+  if (idx === S.active) return;
+  const kids = els.lyrics.children;
+  if (S.active >= 0 && kids[S.active]) kids[S.active].className = "ln past";
+  for (let i = Math.max(0, S.active + 1); i < idx; i++) if (kids[i]) kids[i].className = "ln past";
+  if (idx < S.active) for (let i = Math.max(idx + 1, 0); i <= S.active; i++) if (kids[i]) kids[i].className = "ln";
+  S.active = idx;
+  if (idx >= 0 && kids[idx]) {
+    kids[idx].className = "ln on";
+    const center = els.wrap.clientHeight * 0.38;
+    const y = center - (kids[idx].offsetTop + kids[idx].offsetHeight / 2);
+    els.lyrics.style.transform = "translateY(" + y + "px)";
+  }
+}
+
+/* ---------- groove engine (the bars) ---------- */
+/* B = boom (big, low)   p = pow (snare, mid)   h = small hat (high)   . = rest. 16 steps = 2 bars of 8ths */
+const GROOVES = [
+  "B..pB.p.B.BpB.p.",
+  "B.p.B..pB.B.p.p.",
+  "B...pB.pB.p.B.pp",
+  "BpB..p.pB..pB.p.",
+  "B..p.pB.B.p.B.Bp",
+  "B.pB..p.B..p.BhB"
+];
+const BPM = 94;
+const STEP = 60 / BPM / 2;           // seconds per step
+const N = 28;
+const barsEl = $("bars");
+const bars = [];
+for (let i = 0; i < N; i++) { const b = document.createElement("i"); barsEl.appendChild(b); bars.push(b); }
+const gauss = (x, c, w) => Math.exp(-Math.pow((x - c) / w, 2));
+const W = { B: [], p: [], h: [] };
+for (let i = 0; i < N; i++) { const x = i / (N - 1);
+  W.B.push(gauss(x, 0.10, 0.28)); W.p.push(gauss(x, 0.52, 0.26)); W.h.push(gauss(x, 0.88, 0.22)); }
+const env = { B: 0, p: 0, h: 0 };
+const DECAY = { B: 5.5, p: 8.5, h: 13 };
+const HIT = { B: 1, p: 0.82, h: 0.38 };
+const bh = new Array(N).fill(0.05);
+let grooveIdx = 0, loop = 0, step = 0, acc = 0, lastT = performance.now(), glowE = 0;
+function nextHit() {
+  let g = GROOVES[grooveIdx];
+  if (loop % 4 === 3 && step >= 14) g = g.slice(0, 14) + "pp";      // small fill every 4th loop
+  const ch = g[step];
+  step++;
+  if (step >= 16) { step = 0; loop++; if (loop % 2 === 0) grooveIdx = (grooveIdx + 1 + (Math.random() * 2 | 0)) % GROOVES.length; }
+  return ch;
+}
+function frame(now) {
+  const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
+  const play = S.playing && !!S.track;
+  if (play) {
+    acc += dt;
+    while (acc >= STEP) { acc -= STEP; const ch = nextHit(); if (HIT[ch]) env[ch] = Math.min(1.15, env[ch] + HIT[ch] * (0.88 + Math.random() * 0.2)); }
+  }
+  for (const k in env) env[k] *= Math.exp(-dt * DECAY[k]);
+  const tm = now / 1000;
+  for (let i = 0; i < N; i++) {
+    const idle = play ? 0.07 + 0.05 * (Math.sin(tm * 2.1 + i * 0.7) * 0.5 + 0.5) : 0.04;
+    let target = idle + env.B * W.B[i] * 0.95 + env.p * W.p[i] * 0.85 + env.h * W.h[i] * 0.8;
+    target *= play ? (0.9 + 0.1 * Math.sin(tm * 9 + i * 1.9)) : 1;
+    target = Math.min(1, target);
+    bh[i] += (target - bh[i]) * Math.min(1, dt * (target > bh[i] ? 28 : 11));
+    bars[i].style.transform = "scaleY(" + bh[i].toFixed(3) + ")";
+  }
+  glowE += ((play ? Math.min(1, env.B * 0.9 + env.p * 0.4) : 0) - glowE) * Math.min(1, dt * 10);
+  document.documentElement.style.setProperty("--e", glowE.toFixed(3));
+
+  if (S.track) {
+    const ms = Math.min(pos(), S.track.dur);
+    els.fill.style.width = (S.track.dur ? ms / S.track.dur * 100 : 0).toFixed(2) + "%";
+    els.tc.textContent = fmt(ms); els.td.textContent = fmt(S.track.dur);
+    updateLyricPos(ms);
+  } else { els.fill.style.width = "0%"; els.tc.textContent = "0:00"; els.td.textContent = "0:00"; }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- polling ---------- */
+let polling = false, failCount = 0;
+async function poll() {
+  if (polling || document.hidden) return;
+  polling = true;
+  try {
+    const tr = await fetchNow();
+    if (tr === undefined) { /* rate-limited or hiccup: keep going */ }
+    else if (tr === null) { S.playing = false; if (S.track && !S.playing) { /* keep last song on screen when paused/stopped */ } }
+    else {
+      if (!S.track || S.track.id !== tr.id) { S.base = tr.progress; S.stamp = performance.now(); }
+      applyTrack(tr); setPos(tr.progress, tr.playing);
+    }
+    failCount = 0;
+  } catch (e) {
+    if (String(e.message) === "auth") { showSetup("Spotify sign-in expired. Tap Connect to sign in again.", true); return; }
+    failCount++;
+  } finally { polling = false; }
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
+
+/* ---------- demo mode (?demo) – made-up text, no login ---------- */
+function startDemo() {
+  showReady();
+  const lines = ["Headlights on the back road", "Engine humming low", "Windows down, nowhere to be", "Let the whole night show", "Gravel under the tires", "Dust in the rearview glow", "Every mile a little further", "From the places that I know", "♪", "Turn it up and let it run", "Topographic lines on the dash", "Counting hills one by one", "Nothing left to catch"];
+  const demoLines = lines.map((t, i) => ({ t: 2000 + i * 3600, text: t }));
+  const tr = { id: "demo", title: "Back Road Demo", artist: "Test Artist", album: "Demo", dur: 60000, art: "", progress: 0, playing: true, isTrack: false };
+  S.track = null; applyTrack(tr);
+  document.body.classList.remove("nolyr");
+  S.lines = demoLines; renderLyrics(demoLines);
+  S.playing = true; S.base = params.get("t") ? parseInt(params.get("t"), 10) : 0; S.stamp = performance.now();
+  els.art.style.backgroundImage = "linear-gradient(135deg,#2b2f2c,#6a736c 55%,#1c1f1d)";
+  setInterval(() => { if (pos() > 60000) { S.base = 0; S.stamp = performance.now(); S.active = -1; renderLyrics(demoLines); } }, 500);
+  requestAnimationFrame(frame);
+}
+
+/* ---------- setup screen ---------- */
+function showSetup(msg, expired) {
+  document.body.classList.remove("ready");
+  $("ruri").textContent = REDIRECT;
+  $("cid").value = store.get("td_client") || "";
+  if (msg) $("setupText").textContent = msg;
+  if (expired) { store.del("td_tok"); tok = null; }
+}
+$("connect").onclick = async () => {
+  const v = $("cid").value.trim();
+  if (v.length < 20) { $("err").textContent = "That doesn't look like a Client ID."; return; }
+  $("err").textContent = "";
+  try { await startLogin(v); } catch (e) { $("err").textContent = "Couldn't start sign-in: " + e.message; }
+};
+
+/* ---------- boot ---------- */
+(async function boot() {
+  if (DEMO) return startDemo();
+  const code = params.get("code");
+  if (params.get("error")) { history.replaceState({}, "", REDIRECT); showSetup("Spotify said: " + params.get("error") + ". Try again."); $("err").textContent = ""; return; }
+  if (code) {
+    try { await handleCallback(code); } catch (e) { history.replaceState({}, "", REDIRECT); showSetup("Sign-in failed (" + e.message + "). Check the Client ID and Redirect URI, then try again."); return; }
+    history.replaceState({}, "", REDIRECT);
+  }
+  if (await getToken()) { showReady(); poll(); setInterval(poll, 1500); requestAnimationFrame(frame); }
+  else showSetup();
+})();
+})();
+</script>
+</body>
+</html>
