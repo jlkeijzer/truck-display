@@ -10,7 +10,6 @@
 <meta name="apple-mobile-web-app-title" content="Truck">
 <meta name="theme-color" content="#0b0c0b">
 <style>
-  :root { --e: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   html, body { height: 100%; background: #0b0c0b; color: #fff; overflow: hidden;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Arial, sans-serif; }
@@ -26,8 +25,6 @@
   #shade { position: fixed; inset: 0;
     background: radial-gradient(ellipse at 70% 50%, rgba(8,9,8,.35), rgba(8,9,8,.78) 85%);
   }
-  #glow { position: fixed; inset: 0; background: radial-gradient(ellipse at 22% 70%, rgba(255,255,255,.10), transparent 60%);
-    opacity: calc(var(--e) * 1); pointer-events: none; }
 
   /* ---------- main layout ---------- */
   #app { position: fixed; inset: 0; display: none; padding: max(4vh, env(safe-area-inset-top)) 5vw max(4vh, env(safe-area-inset-bottom)) 5vw;
@@ -86,7 +83,7 @@
 </style>
 </head>
 <body>
-<div id="bg"></div><div id="shade"></div><div id="glow"></div>
+<div id="bg"></div><div id="shade"></div>
 
 <div id="setup">
   <div class="card" id="setupCard">
@@ -319,57 +316,103 @@ function updateLyricPos(ms) {
 }
 
 /* ---------- groove engine (the bars) ---------- */
-/* B = boom (big, low)   p = pow (snare, mid)   h = small hat (high)   . = rest. 16 steps = 2 bars of 8ths */
-const GROOVES = [
-  "B..pB.p.B.BpB.p.",
-  "B.p.B..pB.B.p.p.",
-  "B...pB.pB.p.B.pp",
-  "BpB..p.pB..pB.p.",
-  "B..p.pB.B.p.B.Bp",
-  "B.pB..p.B..p.BhB"
-];
-const BPM = 94;
-const STEP = 60 / BPM / 2;           // seconds per step
+/* A made-up drummer on a 16th-note grid. Each song gets its own tempo, swing and kick style.
+   Every 8 bars the "section" changes (groove, breakdown, build-up, drop), with fills every 4th bar,
+   ghost notes, open hats, tom rolls that sweep across the bars, two wandering "synth" peaks,
+   and per-bar flutter so the shape never repeats exactly. */
 const N = 28;
 const barsEl = $("bars");
 const bars = [];
 for (let i = 0; i < N; i++) { const b = document.createElement("i"); barsEl.appendChild(b); bars.push(b); }
 const gauss = (x, c, w) => Math.exp(-Math.pow((x - c) / w, 2));
-const W = { B: [], p: [], h: [] };
-for (let i = 0; i < N; i++) { const x = i / (N - 1);
-  W.B.push(gauss(x, 0.10, 0.28)); W.p.push(gauss(x, 0.52, 0.26)); W.h.push(gauss(x, 0.88, 0.22)); }
-const env = { B: 0, p: 0, h: 0 };
-const DECAY = { B: 5.5, p: 8.5, h: 13 };
-const HIT = { B: 1, p: 0.82, h: 0.38 };
+const rnd = (a, b) => a + Math.random() * (b - a);
+const pick = a => a[Math.random() * a.length | 0];
+const KICKS = ["x.....x...x.....", "x.......x.x.....", "x..x....x.....x.", "x.....x.x..x....",
+               "x...x...x...x...", "x..x..x...x..x..", "x.x.....x..x..x.", "x......xx.....x."];
+const SNARE = "....x.......x...";
+const hits = [];                                   // live drum hits: centre, width, strength, decay
+const peaks = [{ c: .3, t: .3, a: 0, ta: 0 }, { c: .7, t: .7, a: 0, ta: 0 }];
+const flut = new Float32Array(N).fill(.5), flutT = new Float32Array(N).fill(.5);
 const bh = new Array(N).fill(0.05);
-let grooveIdx = 0, loop = 0, step = 0, acc = 0, lastT = performance.now(), glowE = 0;
-function nextHit() {
-  let g = GROOVES[grooveIdx];
-  if (loop % 4 === 3 && step >= 14) g = g.slice(0, 14) + "pp";      // small fill every 4th loop
-  const ch = g[step];
+let stepDur = 60 / 96 / 4, swing = 0, kick = KICKS[0], hatChance = .3;
+let step = 0, bar = -1, acc = 0, lastT = performance.now();
+let section = "groove", nextSection = null, energy = .85, songSeen = null;
+
+function seedSong(id) {
+  let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  const bpm = 84 + h % 45;                         // 84–128 bpm, fixed per song
+  stepDur = 60 / bpm / 4;
+  swing = ((h >> 8) % 3) * .06;                    // none, light or heavy swing
+  kick = KICKS[(h >> 12) % KICKS.length];
+  hatChance = .15 + ((h >> 16) % 5) * .1;
+  step = 0; bar = -1; acc = 0; section = "groove"; nextSection = null; energy = .85;
+}
+function hit(c, w, a, d) { hits.push({ c, w, a: a * rnd(.85, 1.12), d }); if (hits.length > 48) hits.shift(); }
+function newBar() {
+  bar++;
+  if (bar % 8 === 0) {
+    if (nextSection) { section = nextSection; nextSection = null; }
+    else if (bar > 0) { const r = Math.random(); section = r < .2 ? "break" : r < .4 ? "build" : "groove"; }
+    if (section === "build") nextSection = "drop";
+    energy = section === "break" ? .5 : section === "drop" ? 1.1 : rnd(.75, 1);
+    kick = pick(KICKS);
+    hatChance = rnd(.1, .6);
+  } else if (bar % 2 === 0 && Math.random() < .35) kick = pick(KICKS);
+}
+function doStep() {
+  const s = step % 16;
+  if (s === 0) newBar();
+  const inSec = (bar % 8) * 16 + s, e = energy;
+  if (section === "break") {
+    if (s % 4 === 2) hit(rnd(.84, .94), .1, .4, 15);
+    if (s === 0 && bar % 2 === 0) hit(.12, .35, .55, 2.2);
+    if (Math.random() < .08) hit(rnd(.3, .7), .1, .35, 6);
+  } else if (section === "build") {
+    const p = inSec / 128, div = p < .5 ? 4 : p < .75 ? 2 : 1;
+    if (s % div === 0) hit(rnd(.45, .58), .2, .3 + .7 * p, 10);
+    if (s % 4 === 0) hit(rnd(.06, .14), .26, .5 + .5 * p, 6);
+    hit(rnd(.82, .95), .1, .15 + .4 * p, 16);
+  } else {
+    if (section === "drop" && inSec === 0) hit(.5, .9, 1.1, 2.4);   // crash across all bars
+    if (bar % 4 === 3 && s >= 12) {                                   // tom roll, high to low
+      const k = s - 12; hit(.8 - k * .2 + rnd(-.04, .04), .13, .9, 8);
+      if (Math.random() < .5) hit(.8 - k * .2 - .1, .1, .6, 10);
+    } else {
+      if (kick[s] === "x") hit(rnd(.05, .17), .26, e, 5.5);
+      if (SNARE[s] === "x") hit(rnd(.45, .57), .22, .9 * e, 8);
+      else if (Math.random() < .14 * e) hit(rnd(.38, .62), .14, .3, 13);
+      if (s % 2 === 0 || Math.random() < hatChance) hit(rnd(.8, .96), .1, s % 4 === 2 ? .55 : .3, 16);
+      if (s === 14 && Math.random() < .35) hit(.88, .2, .6, 4);
+    }
+  }
+  for (let i = 0; i < N; i++) flutT[i] = Math.random();
+  if (s % 4 === 0) for (const pk of peaks) { pk.t = rnd(.15, .95); pk.ta = rnd(.05, .38) * e; }
   step++;
-  if (step >= 16) { step = 0; loop++; if (loop % 2 === 0) grooveIdx = (grooveIdx + 1 + (Math.random() * 2 | 0)) % GROOVES.length; }
-  return ch;
 }
 function frame(now) {
   const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
   const play = S.playing && !!S.track;
+  if (S.track && S.track.id !== songSeen) { songSeen = S.track.id; seedSong(songSeen); }
   if (play) {
     acc += dt;
-    while (acc >= STEP) { acc -= STEP; const ch = nextHit(); if (HIT[ch]) env[ch] = Math.min(1.15, env[ch] + HIT[ch] * (0.88 + Math.random() * 0.2)); }
+    let len;
+    while (acc >= (len = stepDur * (step % 2 ? 1 - swing : 1 + swing))) { acc -= len; doStep(); }
   }
-  for (const k in env) env[k] *= Math.exp(-dt * DECAY[k]);
-  const tm = now / 1000;
+  for (let j = hits.length - 1; j >= 0; j--) { hits[j].a *= Math.exp(-dt * hits[j].d); if (hits[j].a < .01) hits.splice(j, 1); }
+  for (const pk of peaks) { pk.c += (pk.t - pk.c) * Math.min(1, dt * 3); pk.a += ((play ? pk.ta : 0) - pk.a) * Math.min(1, dt * 4); }
   for (let i = 0; i < N; i++) {
-    const idle = play ? 0.07 + 0.05 * (Math.sin(tm * 2.1 + i * 0.7) * 0.5 + 0.5) : 0.04;
-    let target = idle + env.B * W.B[i] * 0.95 + env.p * W.p[i] * 0.85 + env.h * W.h[i] * 0.8;
-    target *= play ? (0.9 + 0.1 * Math.sin(tm * 9 + i * 1.9)) : 1;
+    const x = i / (N - 1);
+    flut[i] += (flutT[i] - flut[i]) * Math.min(1, dt * 14);
+    let target = play ? 0.06 : 0.04;
+    if (play) {
+      for (const h of hits) target += h.a * gauss(x, h.c, h.w);
+      for (const pk of peaks) target += pk.a * gauss(x, pk.c, .09);
+      target *= 0.72 + 0.56 * flut[i];
+    }
     target = Math.min(1, target);
-    bh[i] += (target - bh[i]) * Math.min(1, dt * (target > bh[i] ? 28 : 11));
+    bh[i] += (target - bh[i]) * Math.min(1, dt * (target > bh[i] ? 30 : 10));
     bars[i].style.transform = "scaleY(" + bh[i].toFixed(3) + ")";
   }
-  glowE += ((play ? Math.min(1, env.B * 0.9 + env.p * 0.4) : 0) - glowE) * Math.min(1, dt * 10);
-  document.documentElement.style.setProperty("--e", glowE.toFixed(3));
 
   if (S.track) {
     const ms = Math.min(pos(), S.track.dur);
@@ -383,7 +426,7 @@ function frame(now) {
 /* ---------- polling ---------- */
 let polling = false, failCount = 0;
 async function poll() {
-  if (polling || document.hidden) return;
+  if (DEMO || polling || document.hidden) return;
   polling = true;
   try {
     const tr = await fetchNow();
