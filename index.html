@@ -28,21 +28,33 @@
 
   /* ---------- main layout ---------- */
   #app { position: fixed; inset: 0; display: none; padding: max(4vh, env(safe-area-inset-top)) 5vw max(4vh, env(safe-area-inset-bottom)) 5vw;
-    grid-template-columns: 36% 1fr; grid-template-rows: 1fr auto; column-gap: 5vw; row-gap: 2.5vh; }
+    grid-template-columns: 44% 1fr; grid-template-rows: 1fr auto; column-gap: 5vw; row-gap: 2.5vh; }
   body.ready #app { display: grid; }
 
-  #left { display: flex; flex-direction: column; justify-content: center; gap: 2.4vh; min-width: 0; }
-  #art { width: min(100%, 46vh); aspect-ratio: 1; border-radius: 1.6vh; background: #1a1b1a center / cover no-repeat;
-    box-shadow: 0 2vh 6vh rgba(0,0,0,.6); }
-  #meta { min-width: 0; width: min(100%, 46vh); }
+  #left { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 3vh; min-width: 0; min-height: 0; }
+  #deck { position: relative; width: min(100%, 62vh); aspect-ratio: 1; flex-shrink: 0; }
+  #rec { position: absolute; inset: 0; border-radius: 50%;
+    background: repeating-radial-gradient(circle at center, #121312 0 1.5px, #1c1d1c 1.5px 3px);
+    box-shadow: 0 2vh 6vh rgba(0,0,0,.65), inset 0 0 0 .4vh #0a0b0a;
+    animation: spin 5s linear infinite; animation-play-state: paused; will-change: transform; }
+  body.playing #rec { animation-play-state: running; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #art { position: absolute; inset: 19%; border-radius: 50%; background: #1a1b1a center / cover no-repeat;
+    box-shadow: 0 0 0 .5vh #0d0e0d; }
+  #hole { position: absolute; left: 50%; top: 50%; width: 3.2%; aspect-ratio: 1; transform: translate(-50%, -50%);
+    border-radius: 50%; background: #0b0c0b; box-shadow: 0 0 0 .3vh rgba(255,255,255,.15); }
+  #sheen { position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+    background: conic-gradient(from 20deg, transparent 0 8%, rgba(255,255,255,.07) 13%, transparent 19% 58%, rgba(255,255,255,.05) 63%, transparent 69%); }
+  #right { display: flex; flex-direction: column; gap: 2.4vh; min-width: 0; min-height: 0; padding-top: 3vh; }
+  #meta { min-width: 0; }
   #title { font-size: 3.6vh; font-weight: 700; line-height: 1.15; letter-spacing: -.01em;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
   #artist { margin-top: .7vh; font-size: 2.6vh; color: rgba(255,255,255,.66); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #bars { display: flex; align-items: flex-end; gap: .55vh; height: 9vh; width: min(100%, 46vh); }
+  #bars { display: flex; align-items: flex-end; gap: .55vh; height: 8vh; width: min(100%, 62vh); flex-shrink: 0; }
   #bars i { flex: 1; height: 100%; background: linear-gradient(to top, rgba(255,255,255,.95), rgba(255,255,255,.35));
     border-radius: .5vh; transform-origin: bottom; transform: scaleY(.05); will-change: transform; }
 
-  #lyricsWrap { position: relative; min-height: 0; overflow: hidden;
+  #lyricsWrap { position: relative; flex: 1; min-height: 0; overflow: hidden;
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18%, #000 82%, transparent 100%);
             mask-image: linear-gradient(to bottom, transparent 0, #000 18%, #000 82%, transparent 100%); }
   #lyrics { position: absolute; left: 0; right: 0; top: 0; transition: transform .55s cubic-bezier(.22,.8,.3,1); will-change: transform; }
@@ -100,13 +112,15 @@
 
 <div id="app">
   <div id="left">
-    <div id="art"></div>
-    <div id="meta"><div id="title">Nothing playing</div><div id="artist">&nbsp;</div></div>
+    <div id="deck"><div id="rec"><div id="art"></div><div id="hole"></div></div><div id="sheen"></div></div>
     <div id="bars"></div>
   </div>
-  <div id="lyricsWrap">
-    <div id="lyrics"></div>
-    <div id="nolyrics">No synced lyrics for this song</div>
+  <div id="right">
+    <div id="meta"><div id="title">Nothing playing</div><div id="artist">&nbsp;</div></div>
+    <div id="lyricsWrap">
+      <div id="lyrics"></div>
+      <div id="nolyrics">No synced lyrics for this song</div>
+    </div>
   </div>
   <div id="foot">
     <div class="t" id="tc">0:00</div>
@@ -190,6 +204,7 @@ async function fetchNow() {
     id: it.id, title: it.name,
     artist: isTrack ? it.artists.map(a => a.name).join(", ") : ((it.show && it.show.name) || ""),
     album: isTrack ? it.album.name : "",
+    year: isTrack ? (it.album.release_date || "").slice(0, 4) : "",
     dur: it.duration_ms, art: (imgs[0] || {}).url || "",
     progress: j.progress_ms || 0, playing: !!j.is_playing, isTrack
   };
@@ -271,7 +286,7 @@ function applyTrack(tr) {
     document.body.classList.remove("nolyr"); els.lyrics.innerHTML = ""; return;
   }
   if (changed) {
-    els.title.textContent = tr.title; els.artist.textContent = tr.artist;
+    els.title.textContent = tr.title; els.artist.textContent = tr.artist + (tr.year ? " · " + tr.year : "");
     els.art.style.backgroundImage = tr.art ? 'url("' + tr.art + '")' : "";
     S.offset = 0; updateNudge();
     S.lines = null; S.lyricsFor = tr.id;
@@ -336,7 +351,7 @@ const flut = new Float32Array(N).fill(.5), flutT = new Float32Array(N).fill(.5);
 const bh = new Array(N).fill(0.05);
 let stepDur = 60 / 96 / 4, swing = 0, kick = KICKS[0], hatChance = .3;
 let step = 0, bar = -1, acc = 0, lastT = performance.now();
-let section = "groove", nextSection = null, energy = .85, songSeen = null;
+let section = "groove", nextSection = null, energy = .85, songSeen = null, wasPlaying = false;
 
 function seedSong(id) {
   let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
@@ -392,6 +407,7 @@ function doStep() {
 function frame(now) {
   const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
   const play = S.playing && !!S.track;
+  if (play !== wasPlaying) { wasPlaying = play; document.body.classList.toggle("playing", play); }
   if (S.track && S.track.id !== songSeen) { songSeen = S.track.id; seedSong(songSeen); }
   if (play) {
     acc += dt;
@@ -449,7 +465,7 @@ function startDemo() {
   showReady();
   const lines = ["Headlights on the back road", "Engine humming low", "Windows down, nowhere to be", "Let the whole night show", "Gravel under the tires", "Dust in the rearview glow", "Every mile a little further", "From the places that I know", "♪", "Turn it up and let it run", "Topographic lines on the dash", "Counting hills one by one", "Nothing left to catch"];
   const demoLines = lines.map((t, i) => ({ t: 2000 + i * 3600, text: t }));
-  const tr = { id: "demo", title: "Back Road Demo", artist: "Test Artist", album: "Demo", dur: 60000, art: "", progress: 0, playing: true, isTrack: false };
+  const tr = { id: "demo", title: "Back Road Demo", artist: "Test Artist", album: "Demo", year: "2019", dur: 60000, art: "", progress: 0, playing: true, isTrack: false };
   S.track = null; applyTrack(tr);
   document.body.classList.remove("nolyr");
   S.lines = demoLines; renderLyrics(demoLines);
