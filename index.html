@@ -81,7 +81,6 @@
   #nudge { display: flex; align-items: center; gap: 1vh; opacity: .35; }
   #nudge button { background: rgba(255,255,255,.12); color: #fff; border: 0; border-radius: 1vh;
     width: 5vh; height: 4.4vh; font-size: 2.4vh; font-weight: 700; }
-  #nudge span { font-size: 1.9vh; min-width: 7vh; text-align: center; color: #fff; font-variant-numeric: tabular-nums; }
 
   /* ---------- setup / status screens ---------- */
   #setup { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 5vh 6vw; }
@@ -100,7 +99,20 @@
   /* ---------- layout 14: everything centered, stacked ---------- */
   #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; row-gap: 2vh; justify-items: center; }
   #left { gap: 2.2vh; }
-  #foot { justify-self: stretch; }
+  #app { grid-template-rows: auto 1fr auto auto; row-gap: 1.6vh; }
+  #right { position: relative; }
+  #foot { justify-self: center; width: min(94vw, 82vh); gap: 1.6vh; }
+  #foot .t { min-width: 7.5vh; }
+  #meta { justify-self: center; }
+  /* sync buttons: two album-colored circles, minus on the left, plus on the right, level with the current line */
+  #nudge { position: absolute; inset: 0; display: block; opacity: 1; pointer-events: none; }
+  #nudge button { position: absolute; top: 50%; transform: translateY(-50%); pointer-events: auto;
+    width: 6.4vh; height: 6.4vh; border-radius: 50%; padding: 0; font-size: 3.6vh; font-weight: 800; line-height: 1;
+    background: rgb(var(--acc)); color: #0b0c0b; transition: background-color 1s, transform .12s; }
+  #nudge button:active { transform: translateY(-50%) scale(.9); }
+  #nm { left: 2vw; }
+  #np { right: 2vw; }
+  .ln { padding-left: 9vh; padding-right: 9vh; }
   #deck { width: 44vh; }
   #bars { width: min(90vw, 64vh); height: 6.5vh; }
   #right { width: 100%; align-items: center; gap: 1vh; padding-top: 0; }
@@ -143,18 +155,18 @@
     <div id="bars"></div>
   </div>
   <div id="right">
-    <div id="meta"><div id="title">Nothing playing</div><div id="artist">&nbsp;</div></div>
     <div id="lyricsWrap">
       <div id="lyrics"></div>
       <div id="nolyrics">No synced lyrics for this song</div>
     </div>
+    <div id="nudge"><button id="nm" aria-label="Lyrics earlier">−</button><button id="np" aria-label="Lyrics later">+</button></div>
   </div>
   <div id="foot">
     <div class="t" id="tc">0:00</div>
     <div id="track"><div id="fill"></div></div>
     <div class="t r" id="td">0:00</div>
-    <div id="nudge"><button id="nm">−</button><span id="nv">sync 0.0s</span><button id="np">+</button></div>
   </div>
+  <div id="meta"><div id="title">Nothing playing</div><div id="artist">&nbsp;</div></div>
 </div>
 
 <script>
@@ -322,7 +334,7 @@ async function getLyrics(tr) {
 /* ---------- UI state ---------- */
 const S = { track: null, lines: null, active: -1, base: 0, stamp: 0, playing: false, offset: 0, lyricsFor: null, hold: 0 };
 const els = { title: $("title"), artist: $("artist"), art: $("art"), lyrics: $("lyrics"), wrap: $("lyricsWrap"),
-  fill: $("fill"), tc: $("tc"), td: $("td"), nv: $("nv") };
+  fill: $("fill"), tc: $("tc"), td: $("td") };
 
 function showReady() { document.body.classList.add("ready"); }
 function renderLyrics(lines) {
@@ -432,9 +444,10 @@ function applyTrack(tr) {
     else document.body.classList.add("nolyr");
   }
 }
-function updateNudge() { els.nv.textContent = "sync " + (S.offset >= 0 ? "+" : "") + (S.offset / 1000).toFixed(1) + "s"; }
-$("nm").onclick = () => { S.offset -= 500; updateNudge(); };
-$("np").onclick = () => { S.offset += 500; updateNudge(); };
+function updateNudge() {}
+/* sync buttons: − shows lyrics earlier, + later, half a second per tap */
+$("nm").onclick = () => { S.offset -= 500; };
+$("np").onclick = () => { S.offset += 500; };
 
 function pos() { return S.base + (S.playing ? performance.now() - S.stamp : 0); }
 function setPos(progress, playing) {
