@@ -104,15 +104,17 @@
   #foot { justify-self: center; width: min(94vw, 82vh); gap: 1.6vh; }
   #foot .t { min-width: 7.5vh; }
   #meta { justify-self: center; }
-  /* sync buttons: two album-colored circles, minus on the left, plus on the right, level with the current line */
+  /* sync buttons: two album-colored circles, minus left of the record, plus right of it, level with its center */
+  #left { position: relative; }
   #nudge { position: absolute; inset: 0; display: block; opacity: 1; pointer-events: none; }
-  #nudge button { position: absolute; top: 50%; transform: translateY(-50%); pointer-events: auto;
-    width: 6.4vh; height: 6.4vh; border-radius: 50%; padding: 0; font-size: 3.6vh; font-weight: 800; line-height: 1;
-    background: rgb(var(--acc)); color: #0b0c0b; transition: background-color 1s, transform .12s; }
+  #nudge button { position: absolute; top: 22vh; transform: translateY(-50%); pointer-events: auto;
+    width: 4.8vh; height: 4.8vh; border-radius: 50%; padding: 0; font-size: 2.8vh; font-weight: 800; line-height: 1;
+    background: transparent; border: .28vh solid rgb(var(--acc)); color: rgb(var(--acc));
+    opacity: .2; transition: opacity .8s, border-color 1s, color 1s, transform .12s; }
+  body.nudgeOn #nudge button { opacity: 1; }
   #nudge button:active { transform: translateY(-50%) scale(.9); }
-  #nm { left: 2vw; }
-  #np { right: 2vw; }
-  .ln { padding-left: 9vh; padding-right: 9vh; }
+  #nm { right: calc(50% + 22vh + 5vh); }
+  #np { left: calc(50% + 22vh + 5vh); }
   #deck { width: 44vh; }
   #bars { width: min(90vw, 64vh); height: 6.5vh; }
   #right { width: 100%; align-items: center; gap: 1vh; padding-top: 0; }
@@ -153,13 +155,13 @@
     <div id="deck"><div id="rec"><div id="art"></div>
       <div id="hole"></div></div><div id="sheen"></div></div>
     <div id="bars"></div>
+    <div id="nudge"><button id="nm" aria-label="Lyrics earlier">−</button><button id="np" aria-label="Lyrics later">+</button></div>
   </div>
   <div id="right">
     <div id="lyricsWrap">
       <div id="lyrics"></div>
       <div id="nolyrics">No synced lyrics for this song</div>
     </div>
-    <div id="nudge"><button id="nm" aria-label="Lyrics earlier">−</button><button id="np" aria-label="Lyrics later">+</button></div>
   </div>
   <div id="foot">
     <div class="t" id="tc">0:00</div>
@@ -433,7 +435,7 @@ function applyTrack(tr) {
   if (changed) {
     els.title.textContent = tr.title; els.artist.textContent = tr.artist + (tr.year ? " · " + tr.year : "");
     swapRecord();
-    S.offset = 0; updateNudge();
+    S.offset = 0; wakeNudge(20000);
     S.lines = null; S.lyricsFor = tr.id;
     renderLyrics(null); els.lyrics.innerHTML = "";
     document.body.classList.remove("nolyr");
@@ -444,10 +446,15 @@ function applyTrack(tr) {
     else document.body.classList.add("nolyr");
   }
 }
-function updateNudge() {}
 /* sync buttons: − shows lyrics earlier, + later, half a second per tap */
-$("nm").onclick = () => { S.offset -= 500; };
-$("np").onclick = () => { S.offset += 500; };
+/* full color for the first 20 s of each song and for 15 s after a tap, otherwise faint */
+let nudgeTimer = 0;
+function wakeNudge(ms) {
+  document.body.classList.add("nudgeOn");
+  clearTimeout(nudgeTimer); nudgeTimer = setTimeout(() => document.body.classList.remove("nudgeOn"), ms);
+}
+$("nm").onclick = () => { S.offset -= 500; wakeNudge(15000); };
+$("np").onclick = () => { S.offset += 500; wakeNudge(15000); };
 
 function pos() { return S.base + (S.playing ? performance.now() - S.stamp : 0); }
 function setPos(progress, playing) {
