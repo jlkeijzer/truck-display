@@ -96,7 +96,29 @@
     -webkit-user-select: text; user-select: text; font-family: ui-monospace, Menlo, monospace; }
   .card button { background: #fff; color: #000; border: 0; border-radius: 1.2vh; padding: 1.8vh 2.6vw; font-size: 2.3vh; font-weight: 700; }
   #err { color: #ff8a80; font-size: 2vh; margin-top: 1.6vh; min-height: 2.4vh; }
-</style>
+
+  /* ---------- layout 14: everything centered, stacked ---------- */
+  #app { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; row-gap: 2vh; justify-items: center; }
+  #left { gap: 2.2vh; }
+  #foot { justify-self: stretch; }
+  #deck { width: 44vh; }
+  #bars { width: min(90vw, 64vh); height: 6.5vh; }
+  #right { width: 100%; align-items: center; gap: 1vh; padding-top: 0; }
+  #meta { order: 2; display: flex; justify-content: center; align-items: baseline; gap: 1.2vh; max-width: 90%; }
+  #title { font-size: 2.4vh; -webkit-line-clamp: 1; }
+  #artist { margin-top: 0; font-size: 2.4vh; }
+  #artist::before { content: "·  "; }
+  #lyricsWrap { width: 100%;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 30%, #000 70%, transparent 100%);
+            mask-image: linear-gradient(to bottom, transparent 0, #000 30%, #000 70%, transparent 100%); }
+  .ln { text-align: center; transform-origin: center center; font-size: 4.6vh; padding: .8vh 4vw; }
+  #nolyrics { justify-content: center; }
+
+  /* ---------- album colors: bars and progress take the cover's color ---------- */
+  :root { --acc: 255,255,255; }
+  #bars i { background: rgb(var(--acc)); transition: background-color 1s;
+    -webkit-mask-image: linear-gradient(to top, #000, rgba(0,0,0,.4)); mask-image: linear-gradient(to top, #000, rgba(0,0,0,.4)); }
+  #fill { background: rgb(var(--acc)); transition: background-color 1s; }</style>
 </head>
 <body>
 <div id="bg"></div><div id="shade"></div><div id="toast"></div>
@@ -148,8 +170,7 @@ const store = {
 };
 const mem = {};
 const params = new URLSearchParams(location.search);
-const DEMO = params.has("demo");
-const REDIRECT = location.origin + location.pathname;
+const DEMO = params.has("demo");const REDIRECT = location.origin + location.pathname;
 const SCOPES = "user-read-currently-playing user-read-playback-state user-modify-playback-state";
 const fmt = ms => { ms = Math.max(0, ms | 0); const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
 
@@ -313,16 +334,66 @@ function renderLyrics(lines) {
   lines.forEach((l, i) => { const d = document.createElement("div"); d.className = "ln"; d.textContent = l.text; f.appendChild(d); });
   els.lyrics.appendChild(f);
   els.lyrics.style.transition = "none";
-  els.lyrics.style.transform = "translateY(" + (els.wrap.clientHeight * 0.38) + "px)";
+  els.lyrics.style.transform = "translateY(" + (els.wrap.clientHeight * 0.5) + "px)";
   void els.lyrics.offsetHeight;
   els.lyrics.style.transition = "";
+}
+/* album colors: find the cover's strongest color and use it for the bars and progress bar (lyrics stay white) */
+const colorCache = new Map();
+function rgbToHsl(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  if (!d) return [0, 0, l];
+  const s = d / (1 - Math.abs(2 * l - 1));
+  const h = mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h * 60, s, l];
+}
+function hslToRgb(h, s, l) {
+  const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2;
+  const [r, g, b] = h < 60 ? [c, x, 0] : h < 120 ? [x, c, 0] : h < 180 ? [0, c, x] : h < 240 ? [0, x, c] : h < 300 ? [x, 0, c] : [c, 0, x];
+  return [r, g, b].map(v => Math.round((v + m) * 255));
+}
+function pickColor(url) {
+  if (colorCache.has(url)) return Promise.resolve(colorCache.get(url));
+  return new Promise(res => {
+    const im = new Image(); im.crossOrigin = "anonymous";
+    im.onerror = () => res(null);
+    im.onload = () => {
+      try {
+        const c = document.createElement("canvas"); c.width = c.height = 32;
+        const x = c.getContext("2d"); x.drawImage(im, 0, 0, 32, 32);
+        const px = x.getImageData(0, 0, 32, 32).data;
+        const bins = Array.from({ length: 12 }, () => ({ w: 0, h: 0, s: 0 }));
+        for (let i = 0; i < px.length; i += 4) {
+          const [h, s, l] = rgbToHsl(px[i], px[i + 1], px[i + 2]);
+          const w = s * s * (l > .15 && l < .85 ? 1 : .1);       // colorful, not too dark or washed out
+          const bn = bins[Math.floor(h / 30) % 12]; bn.w += w; bn.h += h * w; bn.s += s * w;
+        }
+        const top = bins.reduce((a, b) => b.w > a.w ? b : a);
+        const out = top.w < 8 ? null : { h: top.h / top.w, s: top.s / top.w };   // gray covers stay white
+        colorCache.set(url, out); res(out);
+      } catch (e) { res(null); }
+    };
+    im.src = url;
+  });
+}
+function applyColor(c) {
+  const root = document.documentElement.style;
+  if (!c) { root.setProperty("--acc", "255,255,255"); return; }
+  const s = Math.min(.9, Math.max(.55, c.s));
+  root.setProperty("--acc", hslToRgb(c.h, s, .62).join(","));        // bright enough to pop on black
+}
+function setColors(tr) {
+  if (tr.acc !== undefined) return applyColor(tr.acc);                // demo songs
+  if (!tr.art) return applyColor(null);
+  pickColor(tr.art).then(c => { if (S.track && S.track.id === tr.id) applyColor(c); });
 }
 const artCss = tr => tr.artCss || (tr.art ? 'url("' + tr.art + '")' : "");
 /* record swap: old record rolls off to the left, the new one rolls back in */
 let firstRecord = true, swapId = 0;
 function swapRecord() {
   const deck = $("deck"), tr = S.track;
-  const put = () => { if (!S.track) return; els.art.style.backgroundImage = artCss(S.track); };
+  const put = () => { if (!S.track) return; els.art.style.backgroundImage = artCss(S.track); setColors(S.track); };
   if (firstRecord || !deck.animate) { firstRecord = false; put(); return; }
   const my = ++swapId;
   const off = "translateX(-125%) rotate(-150deg)";
@@ -386,7 +457,7 @@ function updateLyricPos(ms) {
   S.active = idx;
   if (idx >= 0 && kids[idx]) {
     kids[idx].className = "ln on";
-    const center = els.wrap.clientHeight * 0.38;
+    const center = els.wrap.clientHeight * 0.5;
     const y = center - (kids[idx].offsetTop + kids[idx].offsetHeight / 2);
     els.lyrics.style.transform = "translateY(" + y + "px)";
   }
@@ -530,9 +601,9 @@ function startDemo() {
   const demoLines = lines.map((t, i) => ({ t: 2000 + i * 3600, text: t }));
   const demoTracks = [
     { id: "demo1", title: "Back Road Demo", artist: "Test Artist", album: "Gravel Roads", year: "2019", dur: 60000,
-      art: "", artCss: "linear-gradient(135deg,#2b2f2c,#6a736c 55%,#1c1f1d)", isTrack: false },
+      art: "", artCss: "linear-gradient(135deg,#1d9e75,#0f6e56 55%,#04342c)", acc: { h: 160, s: .7 }, isTrack: false },
     { id: "demo2", title: "Second Demo Song", artist: "Other Artist", album: "Night Drive", year: "2023", dur: 60000,
-      art: "", artCss: "linear-gradient(160deg,#d85a30,#7f77dd 60%,#26215c)", isTrack: false }
+      art: "", artCss: "linear-gradient(160deg,#d85a30,#993c1d 60%,#4a1b0c)", acc: { h: 15, s: .7 }, isTrack: false }
   ];
   let which = 0;
   const load = () => {
