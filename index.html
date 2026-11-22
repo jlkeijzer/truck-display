@@ -46,6 +46,9 @@
     border: 1px solid rgba(255,255,255,.14); border-radius: 1.4vh; padding: 1.4vh 2.4vw; font-size: 2.2vh;
     opacity: 0; transition: opacity .3s; pointer-events: none; }
   #toast.show { opacity: 1; }
+  #net { position: fixed; z-index: 5; left: 50%; top: max(1.5vh, env(safe-area-inset-top)); transform: translateX(-50%);
+    font-size: 1.9vh; color: rgba(255,255,255,.6); opacity: 0; transition: opacity .4s; pointer-events: none; }
+  body.ready.offline #net { opacity: 1; }
   #hole { position: absolute; left: 50%; top: 50%; width: 3.2%; aspect-ratio: 1; transform: translate(-50%, -50%);
     border-radius: 50%; background: #0b0c0b; box-shadow: 0 0 0 .3vh rgba(255,255,255,.15); }
   #sheen { position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
@@ -135,12 +138,12 @@
   #fill { background: rgb(var(--acc)); transition: background-color 1s; }</style>
 </head>
 <body>
-<div id="bg"></div><div id="shade"></div><div id="toast"></div>
+<div id="bg"></div><div id="shade"></div><div id="toast"></div><div id="net">Waiting for internet…</div>
 
 <div id="setup">
   <div class="card" id="setupCard">
     <h1>Connect Spotify</h1>
-    <p id="setupText">Paste your Spotify Client ID, then tap Connect.</p>
+    <p id="setupText">Tap Connect Spotify to sign in.</p>
     <label for="cid">Client ID</label>
     <input id="cid" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="32 characters">
     <label>Redirect URI (paste this exact address in the Spotify dashboard)</label>
@@ -185,7 +188,11 @@ const store = {
 const mem = {};
 const params = new URLSearchParams(location.search);
 const DEMO = params.has("demo");const REDIRECT = location.origin + location.pathname;
-const SCOPES = "user-read-currently-playing user-read-playback-state user-modify-playback-state";
+/* Julian's Spotify app ("truck display"). A Client ID is not a password: it only starts a sign-in that
+   comes back to this page. Saved here so it never has to be typed again. */
+const CLIENT_ID = "d2d0cf5c9581497c8cdd623d9badb2ac";
+const clientId = () => store.get("td_client") || CLIENT_ID;
+const SCOPES ="user-read-currently-playing user-read-playback-state user-modify-playback-state";
 const fmt = ms => { ms = Math.max(0, ms | 0); const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
 
 /* ---------- auth (Spotify PKCE, no secret needed) ---------- */
@@ -201,10 +208,16 @@ async function startLogin(clientId) {
     code_challenge_method: "S256", code_challenge: challenge, scope: SCOPES });
   location.href = "https://accounts.spotify.com/authorize?" + q;
 }
+/* "revoked" = Spotify really said no (sign in again). "offline" = no internet or a Spotify hiccup:
+   keep the saved sign-in and just try again, so a slow hotspot never logs you out. */
 async function tokenRequest(body) {
-  const r = await fetch("https://accounts.spotify.com/api/token", { method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(body) });
-  if (!r.ok) throw new Error("token " + r.status);
+  let r;
+  try {
+    r = await fetch("https://accounts.spotify.com/api/token", { method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(body) });
+  } catch (e) { throw new Error("offline"); }
+  if (r.status === 400 || r.status === 401) throw new Error("revoked");
+  if (!r.ok) throw new Error("offline");
   const j = await r.json();
   const old = JSON.parse(store.get("td_tok") || "{}");
   const t = { access: j.access_token, refresh: j.refresh_token || old.refresh, scope: j.scope || old.scope || "", exp: Date.now() + j.expires_in * 1000 };
@@ -213,15 +226,15 @@ async function tokenRequest(body) {
 }
 async function handleCallback(code) {
   return tokenRequest({ grant_type: "authorization_code", code, redirect_uri: REDIRECT,
-    client_id: store.get("td_client"), code_verifier: store.get("td_verifier") });
+    client_id: clientId(), code_verifier: store.get("td_verifier") });
 }
 let tok = null;
 async function getToken(force) {
   if (!tok) { try { tok = JSON.parse(store.get("td_tok") || "null"); } catch (e) { tok = null; } }
   if (!tok) return null;
   if (force || Date.now() > tok.exp - 60000) {
-    try { tok = await tokenRequest({ grant_type: "refresh_token", refresh_token: tok.refresh, client_id: store.get("td_client") }); }
-    catch (e) { return null; }
+    try { tok = await tokenRequest({ grant_type: "refresh_token", refresh_token: tok.refresh, client_id: clientId() }); }
+    catch (e) { if (e.message === "revoked") return null; throw e; }   // offline: keep the sign-in, caller retries
   }
   return tok.access;
 }
@@ -238,10 +251,10 @@ async function togglePlay() {
   const want = !S.playing;
   const go = () => { S.base = pos(); S.stamp = performance.now(); S.playing = want; S.hold = performance.now() + 3000; };
   if (DEMO) { go(); return; }
-  await getToken();
+  try { await getToken(); } catch (e) { toast("No internet right now."); return; }
   if (!tok || !/user-modify-playback-state/.test(tok.scope || "")) {
     toast("One-time sign-in to turn on tap to pause…");
-    setTimeout(() => startLogin(store.get("td_client")), 1500);
+    setTimeout(() => startLogin(clientId()), 1500);
     return;
   }
   busy = true;
@@ -595,7 +608,7 @@ function frame(now) {
 /* ---------- polling ---------- */
 let polling = false, failCount = 0;
 async function poll() {
-  if (DEMO || polling || document.hidden) return;
+  if (DEMO || polling || document.hidden || !document.body.classList.contains("ready")) return;
   polling = true;
   try {
     const tr = await fetchNow();
@@ -606,10 +619,11 @@ async function poll() {
       applyTrack(tr);
       if (!(performance.now() < S.hold)) setPos(tr.progress, tr.playing);   // just tapped: trust the tap for a moment
     }
-    failCount = 0;
+    failCount = 0; document.body.classList.remove("offline");
   } catch (e) {
     if (String(e.message) === "auth") { showSetup("Spotify sign-in expired. Tap Connect to sign in again.", true); return; }
-    failCount++;
+    failCount++;                                       // no internet yet (hotspot still connecting): keep trying
+    if (failCount >= 3) document.body.classList.add("offline");
   } finally { polling = false; }
 }
 document.addEventListener("visibilitychange", () => { if (!document.hidden) poll(); });
@@ -641,7 +655,7 @@ function startDemo() {
 function showSetup(msg, expired) {
   document.body.classList.remove("ready");
   $("ruri").textContent = REDIRECT;
-  $("cid").value = store.get("td_client") || "";
+  $("cid").value = clientId();
   if (msg) $("setupText").textContent = msg;
   if (expired) { store.del("td_tok"); tok = null; }
 }
@@ -661,7 +675,10 @@ $("connect").onclick = async () => {
     try { await handleCallback(code); } catch (e) { history.replaceState({}, "", REDIRECT); showSetup("Sign-in failed (" + e.message + "). Check the Client ID and Redirect URI, then try again."); return; }
     history.replaceState({}, "", REDIRECT);
   }
-  if (await getToken()) { showReady(); poll(); setInterval(poll, 1500); requestAnimationFrame(frame); }
+  let signedIn = false;
+  try { signedIn = !!(await getToken()); }
+  catch (e) { signedIn = true; }                      // saved sign-in but no internet yet: show the display and keep trying
+  if (signedIn) { showReady(); poll(); setInterval(poll, 1500); requestAnimationFrame(frame); }
   else showSetup();
 })();
 })();
