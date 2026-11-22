@@ -106,6 +106,11 @@
   #right { position: relative; }
   #foot { justify-self: center; width: min(94vw, 82vh); gap: 1.6vh; }
   #foot .t { min-width: 7.5vh; }
+  /* small skip arrows right at the ends of the progress bar (the button is bigger than the arrow, easier to hit) */
+  .skip { flex: none; width: 6.4vh; height: 6.4vh; margin: 0 -1.8vh; padding: 0; border: 0; background: none;
+    display: flex; align-items: center; justify-content: center; opacity: .6; transition: opacity .2s, transform .12s; }
+  .skip svg { width: 2.5vh; height: 2.5vh; fill: none; stroke: #fff; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .skip:active { opacity: 1; transform: scale(.85); }
   #meta { justify-self: center; }
   /* sync buttons: two album-colored circles, minus left of the record, plus right of it, level with its center */
   #left { position: relative; }
@@ -168,7 +173,9 @@
   </div>
   <div id="foot">
     <div class="t" id="tc">0:00</div>
+    <button class="skip" id="prev" aria-label="Previous song"><svg viewBox="0 0 10 10"><path d="M6.5 1.5 3 5l3.5 3.5"/></svg></button>
     <div id="track"><div id="fill"></div></div>
+    <button class="skip" id="next" aria-label="Next song"><svg viewBox="0 0 10 10"><path d="M3.5 1.5 7 5 3.5 8.5"/></svg></button>
     <div class="t r" id="td">0:00</div>
   </div>
   <div id="meta"><div id="title">Nothing playing</div><div id="artist">&nbsp;</div></div>
@@ -272,6 +279,30 @@ async function togglePlay() {
   } catch (e) { S.playing = was; S.hold = 0; toast("Couldn't reach Spotify. Try again."); }
   finally { busy = false; }
 }
+
+/* ---------- skip arrows: next / previous song (needs Premium) ---------- */
+let skipping = false;
+async function skip(dir) {
+  if (DEMO || skipping) return;
+  try { await getToken(); } catch (e) { toast("No internet right now."); return; }
+  if (!tok || !/user-modify-playback-state/.test(tok.scope || "")) {
+    toast("One-time sign-in to turn on skipping…");
+    setTimeout(() => startLogin(clientId()), 1500);
+    return;
+  }
+  skipping = true;
+  try {
+    let t = await getToken();
+    const call = t => fetch("https://api.spotify.com/v1/me/player/" + dir, { method: "POST", headers: { Authorization: "Bearer " + t } });
+    let r = await call(t);
+    if (r.status === 401) { t = await getToken(true); if (t) r = await call(t); }
+    if (!r.ok) toast(r.status === 404 ? "Spotify isn't open on any device." : r.status === 403 ? "Spotify said no (Premium only)." : "Couldn't reach Spotify. Try again.");
+    else { setTimeout(poll, 350); setTimeout(poll, 1100); }   // show the new song fast
+  } catch (e) { toast("Couldn't reach Spotify. Try again."); }
+  finally { skipping = false; }
+}
+$("prev").onclick = () => skip("previous");
+$("next").onclick = () => skip("next");
 
 /* ---------- Spotify now-playing ---------- */
 async function fetchNow() {
