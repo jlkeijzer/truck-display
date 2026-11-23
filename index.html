@@ -149,6 +149,8 @@
     transition: transform .45s cubic-bezier(.2,.8,.2,1); overflow: hidden; }
   body.onRadar #radar { transform: none; }
   #map { position: absolute; inset: 0; background: #0b0c0b; }
+  #rain { position: absolute; inset: 0; pointer-events: none; filter: blur(5px); }   /* soft, smooth rain */
+  #rain .maplibregl-canvas { background: transparent; }
   .maplibregl-ctrl-attrib { background: rgba(11,12,11,.55) !important; color: rgba(255,255,255,.4) !important; font-size: 1.2vh !important; }
   .maplibregl-ctrl-attrib a { color: rgba(255,255,255,.5) !important; }
   .maplibregl-ctrl-attrib-button { filter: invert(1); opacity: .5; }
@@ -257,6 +259,7 @@
      (only a rounded spot is sent to the free weather services to get the forecast). -->
 <div id="radar">
   <div id="map"></div>
+  <div id="rain"></div>
   <div class="glass" id="wx">
     <div id="clock">--:--</div>
     <div id="date">&nbsp;</div>
@@ -832,7 +835,7 @@ let map = null, open = false;
 function setPage(radar) {
   open = radar;
   document.body.classList.toggle("onRadar", radar);
-  if (radar) { initMap(); refreshAll(); setTimeout(() => map && map.resize(), 500); }
+  if (radar) { initMap(); refreshAll(); setTimeout(() => { if (map) { map.resize(); rain.resize(); } }, 500); }
   else stopPlay();
 }
 let sx = 0, sy = 0, st = 0;
@@ -886,7 +889,11 @@ const ll = p => [p[1], p[0]];                              // [lat, lon] -> [lon
 function initMap() {
   if (map) return;
   if (!window.maplibregl) { setTimeout(initMap, 3000); return; }   // map library still loading (no internet yet)
-  map = new maplibregl.Map({ container: "map", style: "https://tiles.openfreemap.org/styles/dark", center: ll(me), zoom: 9,
+  addSoft();
+  const at = (params.get("at") || "").split(",").map(Number);   // testing: ?at=lat,lon,zoom
+  if (at.length === 3 && at.every(isFinite)) follow = false;
+  map = new maplibregl.Map({ container: "map", style: "https://tiles.openfreemap.org/styles/dark",
+    center: follow ? ll(me) : [at[1], at[0]], zoom: follow ? 9 : at[2],
     minZoom: 3, maxZoom: 15, pitchWithRotate: false, dragRotate: false, touchPitch: false, attributionControl: false });
   map.touchZoomRotate.disableRotation();
   map.addControl(new maplibregl.AttributionControl({ compact: true,
@@ -900,12 +907,27 @@ function initMap() {
   map.on("load", () => {
     const sym = map.getStyle().layers.find(l => l.type === "symbol");   // rain goes under the road and town names
     labelsAt = sym && sym.id;
+    // lakes and rivers in a deep blue instead of gray
+    const paint = (id, k, v) => { if (map.getLayer(id)) map.setPaintProperty(id, k, v); };
+    paint("water", "fill-color", "#0f3554");
+    paint("waterway", "line-color", "#164a72");
+    paint("water_name", "text-color", "#6fa8d6"); paint("water_name", "text-halo-color", "#0b0c0b");
     map.addSource("warn", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     map.addLayer({ id: "warnFill", type: "fill", source: "warn", paint: { "fill-color": ["get", "color"], "fill-opacity": .08 } }, labelsAt);
     map.addLayer({ id: "warnLine", type: "line", source: "warn", paint: { "line-color": ["get", "color"], "line-width": 2.5 } }, labelsAt);
-    mapReady = true;
-    buildFrames(); showFrame(cur); drawWarnings();
+    baseLoaded = true; bothReady();
   });
+  // the rain gets its own see-through map on top, kept in step with the road map, so it can be blurred
+  rain = new maplibregl.Map({ container: "rain", style: { version: 8, sources: {}, layers: [] },
+    center: map.getCenter(), zoom: map.getZoom(), interactive: false, attributionControl: false });
+  map.on("move", () => rain.jumpTo({ center: map.getCenter(), zoom: map.getZoom() }));
+  rain.on("load", () => { rainLoaded = true; bothReady(); });
+}
+let rain = null, baseLoaded = false, rainLoaded = false;
+function bothReady() {
+  if (!baseLoaded || !rainLoaded || mapReady) return;
+  mapReady = true;
+  buildFrames(); showFrame(cur); drawWarnings();
 }
 
 /* ---------- radar frames: past hour, now, next 12 hours ---------- */
@@ -932,14 +954,41 @@ function buildFrames() {
   if (cur === 0 || cur >= frames.length) cur = nowIdx;
   drawScrub(); drawHours();
 }
+/* Soft, smooth rain: the rain is drawn on its own see-through map laid over the road map and blurred
+   (see #rain), so edges come out smooth with no tile seams. Each radar tile is also cleaned first:
+   the faint blue specks (bugs, birds, ground clutter, mist) are dropped. */
+function softTile(blob) {
+  return createImageBitmap(blob).then(img => {
+    const c = document.createElement("canvas"); c.width = c.height = 256;
+    const x = c.getContext("2d"); x.drawImage(img, 0, 0, 256, 256);
+    const d = x.getImageData(0, 0, 256, 256), p = d.data;
+    for (let i = 0; i < p.length; i += 4) {
+      if (!p[i + 3]) continue;
+      const r = p[i], g = p[i + 1], b = p[i + 2];
+      if (b > r + 30 && b >= g) p[i + 3] = 0;            // weakest echoes are drawn in blues: drop them
+    }
+    x.putImageData(d, 0, 0);
+    return new Promise(res => c.toBlob(res, "image/png"));
+  }).then(b => b.arrayBuffer());
+}
+let softReady = false;
+function addSoft() {
+  if (softReady) return; softReady = true;
+  maplibregl.addProtocol("soft", async (params, abort) => {
+    const r = await fetch(params.url.replace("soft://", "https://"), { signal: abort.signal });
+    if (!r.ok) throw new Error("tile " + r.status);
+    return { data: await softTile(await r.blob()) };
+  });
+}
 function layerFor(fr) {
   if (!fr.key || !mapReady) return null;
   const id = "r" + bucket + "_" + fr.key.replace(/[^A-Za-z0-9]/g, "");
   if (!layers.has(id)) {
-    map.addSource(id, { type: "raster", tileSize: 256, maxzoom: 10,
-      tiles: [MESO + "/cache/tile.py/1.0.0/" + fr.key + "/{z}/{x}/{y}.png?b=" + bucket] });
-    map.addLayer({ id, type: "raster", source: id,
-      paint: { "raster-opacity": 0, "raster-opacity-transition": { duration: 0 }, "raster-fade-duration": 0 } }, labelsAt);
+    rain.addSource(id, { type: "raster", tileSize: 256, maxzoom: 9,
+      tiles: [MESO.replace("https://", "soft://") + "/cache/tile.py/1.0.0/" + fr.key + "/{z}/{x}/{y}.png?b=" + bucket] });
+    rain.addLayer({ id, type: "raster", source: id,
+      paint: { "raster-opacity": 0, "raster-opacity-transition": { duration: 0 }, "raster-fade-duration": 0,
+        "raster-resampling": "linear" } });
     layers.set(id, true);
   }
   return id;
@@ -948,12 +997,12 @@ function showFrame(i) {
   cur = Math.max(0, Math.min(frames.length - 1, i));
   const fr = frames[cur]; if (!fr) return;
   const want = layerFor(fr);
-  for (const id of layers.keys()) map.setPaintProperty(id, "raster-opacity", id === want ? .75 : 0);
+  if (mapReady) for (const id of layers.keys()) rain.setPaintProperty(id, "raster-opacity", id === want ? .8 : 0);
   // keep the frames next to this one ready so scrubbing and play stay smooth
   if (frames[cur + 1]) layerFor(frames[cur + 1]);
   drawScrub();
 }
-function clearLayers() { for (const id of layers.keys()) { map.removeLayer(id); map.removeSource(id); } layers.clear(); }
+function clearLayers() { for (const id of layers.keys()) { rain.removeLayer(id); rain.removeSource(id); } layers.clear(); }
 
 /* ---------- the drag bar ---------- */
 const wrap = $("scrubWrap");
