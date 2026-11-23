@@ -189,8 +189,8 @@
   #nowMark { position: absolute; top: 50%; width: .3vh; height: 1.6vh; margin: -.8vh 0 0 -.15vh; background: rgba(255,255,255,.7); border-radius: .3vh; }
   #knob { position: absolute; top: 50%; width: 2.2vh; height: 2.2vh; margin: -1.1vh 0 0 -1.1vh; border-radius: 50%; background: #fff;
     box-shadow: 0 .3vh 1vh rgba(0,0,0,.5); }
-  #wx.past #clock, #wx.fut #clock { color: #9cc8ff; }
-  #when { color: #9cc8ff; }
+  #timeline { background: rgba(14,15,14,.28); border-color: rgba(255,255,255,.08); box-shadow: none;
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }   /* see-through bar */
   #rbtns { right: max(2.6vw, env(safe-area-inset-right)); bottom: calc(max(2.6vh, env(safe-area-inset-bottom)) + 9vh);
     display: flex; flex-direction: column; overflow: hidden; }
   #rbtns button { width: 6.4vh; height: 6.4vh; border: 0; background: none; display: flex; align-items: center; justify-content: center; }
@@ -847,7 +847,7 @@ $("toMusic").onclick = () => setPage(false);
 
 /* ---------- clock ---------- */
 /* When the drag bar is on "Now" the card shows the real time. Dragged away, it shows the time you're
-   looking at (in light blue) and how far away that is. */
+   looking at and how far away that is (all in white). */
 function viewing() { const fr = frames[cur]; return fr && !fr.now ? fr : null; }
 function tick() {
   const v = viewing(), d = v ? v.t : new Date();
@@ -873,6 +873,7 @@ function setMe(lat, lon, approx) {
   if (map) {
     meMarker.setLngLat([lon, lat]);
     if (follow) map.easeTo({ center: [lon, lat], duration: 800 });
+    if (!nearAt || dist(nearAt, me) > 1) applyNear();
   }
   if (!lastWx || dist(lastWx, me) > 8) refreshWeather();   // moved about 5 miles: new forecast
 }
@@ -917,6 +918,8 @@ function initMap() {
     paint("water", "fill-color", "#0f3554");
     paint("waterway", "line-color", "#164a72");
     paint("water_name", "text-color", "#6fa8d6"); paint("water_name", "text-halo-color", "#0b0c0b");
+    for (const l of map.getStyle().layers) if (/^place_|^water_name$/.test(l.id)) nearLayers.push([l.id, l.filter]);
+    applyNear();
     map.addSource("warn", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     map.addLayer({ id: "warnFill", type: "fill", source: "warn", paint: { "fill-color": ["get", "color"], "fill-opacity": .08 } }, labelsAt);
     map.addLayer({ id: "warnLine", type: "line", source: "warn", paint: { "line-color": ["get", "color"], "line-width": 2.5 } }, labelsAt);
@@ -929,6 +932,16 @@ function initMap() {
   rain.on("load", () => { rainLoaded = true; bothReady(); });
 }
 let rain = null, baseLoaded = false, rainLoaded = false;
+/* Town, city, county, state and lake names only show when they're within 20 miles of you (Julian's
+   choice). Road names and numbers always show. Re-checked as you drive. */
+const NEAR_M = 20 * 1609.34;
+let nearLayers = [], nearAt = null;
+function applyNear() {
+  if (!map || !nearLayers.length) return;
+  nearAt = me.slice();
+  const close = ["<=", ["distance", { type: "Point", coordinates: ll(me) }], NEAR_M];
+  for (const [id, f] of nearLayers) map.setFilter(id, f ? ["all", f, close] : close);
+}
 function bothReady() {
   if (!baseLoaded || !rainLoaded || mapReady) return;
   mapReady = true;
@@ -971,6 +984,7 @@ function softTile(blob) {
       if (!p[i + 3]) continue;
       const r = p[i], g = p[i + 1], b = p[i + 2];
       if (b > r + 30 && b >= g) p[i + 3] = 0;            // weakest echoes are drawn in blues: drop them
+      else if (Math.max(r, g, b) - Math.min(r, g, b) < 28) p[i + 3] = 0;   // the forecast draws them in grays: drop those too
     }
     x.putImageData(d, 0, 0);
     return new Promise(res => c.toBlob(res, "image/png"));
