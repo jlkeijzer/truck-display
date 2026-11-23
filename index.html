@@ -154,7 +154,7 @@
   .maplibregl-ctrl-attrib { background: rgba(11,12,11,.55) !important; color: rgba(255,255,255,.4) !important; font-size: 1.2vh !important; }
   .maplibregl-ctrl-attrib a { color: rgba(255,255,255,.5) !important; }
   .maplibregl-ctrl-attrib-button { filter: invert(1); opacity: .5; }
-  .maplibregl-ctrl-bottom-right { bottom: calc(max(2.6vh, env(safe-area-inset-bottom)) + 13.5vh); }
+  .maplibregl-ctrl-bottom-right { bottom: calc(max(2.6vh, env(safe-area-inset-bottom)) + 7.5vh); }
   .glass { position: absolute; z-index: 500; background: rgba(14,15,14,.62); border: 1px solid rgba(255,255,255,.1);
     border-radius: 2.2vh; -webkit-backdrop-filter: blur(18px) saturate(140%); backdrop-filter: blur(18px) saturate(140%);
     box-shadow: 0 1.5vh 4vh rgba(0,0,0,.45); }
@@ -177,30 +177,27 @@
   .al.rain i { background: #5aa9ff; box-shadow: 0 0 1.2vh #5aa9ff; }
   .al.warn { color: #ffb3a8; } .al.warn i { background: #ff5a4a; box-shadow: 0 0 1.2vh #ff5a4a; }
   #timeline { left: 50%; transform: translateX(-50%); bottom: max(2.6vh, env(safe-area-inset-bottom)); width: min(92vw, 150vh);
-    padding: 1.6vh 2.4vh 1.4vh; display: grid; grid-template-columns: auto 1fr; column-gap: 2vh; align-items: center; }
-  #play { width: 6vh; height: 6vh; border-radius: 50%; border: 0; background: rgba(255,255,255,.12); display: flex;
-    align-items: center; justify-content: center; grid-row: span 2; }
-  #play svg { width: 2.6vh; height: 2.6vh; fill: #fff; }
+    padding: .9vh 2.6vh .9vh 1vh; display: flex; align-items: center; gap: 1.6vh; border-radius: 4vh; }
+  #play { flex: none; width: 4.4vh; height: 4.4vh; border-radius: 50%; border: 0; background: rgba(255,255,255,.12); display: flex;
+    align-items: center; justify-content: center; }
+  #play svg { width: 2vh; height: 2vh; fill: #fff; }
   #play:active { transform: scale(.9); }
-  #scrubWrap { position: relative; height: 5vh; touch-action: none; }
-  #scrubTrack { position: absolute; left: 0; right: 0; top: 50%; height: .7vh; margin-top: -.35vh; border-radius: 1vh;
-    background: linear-gradient(to right, rgba(255,255,255,.14) var(--nowPct), rgba(90,169,255,.28) var(--nowPct)); }
-  #nowMark { position: absolute; top: 50%; width: .3vh; height: 2.4vh; margin: -1.2vh 0 0 -.15vh; background: rgba(255,255,255,.7); border-radius: .3vh; }
-  #knob { position: absolute; top: 50%; width: 3.2vh; height: 3.2vh; margin: -1.6vh 0 0 -1.6vh; border-radius: 50%; background: #fff;
-    box-shadow: 0 .4vh 1.4vh rgba(0,0,0,.5); }
-  #knobLabel { position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); margin-bottom: .4vh; font-size: 1.9vh; font-weight: 600;
-    white-space: nowrap; background: rgba(255,255,255,.95); color: #0b0c0b; padding: .4vh 1vh; border-radius: 1vh; }
-  #hours { position: relative; height: 4.6vh; }
-  .hr { position: absolute; top: 0; transform: translateX(-50%); text-align: center; font-size: 1.55vh; line-height: 1.25; color: rgba(255,255,255,.5); }
-  .hr b { display: block; color: #fff; font-weight: 500; font-size: 1.8vh; }
-  .hr em { display: block; font-style: normal; color: #5aa9ff; font-size: 1.4vh; min-height: 1.75vh; }
-  #rbtns { right: max(2.6vw, env(safe-area-inset-right)); bottom: calc(max(2.6vh, env(safe-area-inset-bottom)) + 16vh);
+  /* the touch area stays tall enough for a finger; the bar you see is thin */
+  #scrubWrap { position: relative; flex: 1; height: 4.4vh; touch-action: none; }
+  #scrubTrack { position: absolute; left: 0; right: 0; top: 50%; height: .5vh; margin-top: -.25vh; border-radius: 1vh;
+    background: linear-gradient(to right, rgba(255,255,255,.16) var(--nowPct), rgba(90,169,255,.35) var(--nowPct)); }
+  #nowMark { position: absolute; top: 50%; width: .3vh; height: 1.6vh; margin: -.8vh 0 0 -.15vh; background: rgba(255,255,255,.7); border-radius: .3vh; }
+  #knob { position: absolute; top: 50%; width: 2.2vh; height: 2.2vh; margin: -1.1vh 0 0 -1.1vh; border-radius: 50%; background: #fff;
+    box-shadow: 0 .3vh 1vh rgba(0,0,0,.5); }
+  #wx.past #clock, #wx.fut #clock { color: #9cc8ff; }
+  #when { color: #9cc8ff; }
+  #rbtns { right: max(2.6vw, env(safe-area-inset-right)); bottom: calc(max(2.6vh, env(safe-area-inset-bottom)) + 9vh);
     display: flex; flex-direction: column; overflow: hidden; }
   #rbtns button { width: 6.4vh; height: 6.4vh; border: 0; background: none; display: flex; align-items: center; justify-content: center; }
   #rbtns button + button { border-top: 1px solid rgba(255,255,255,.1); }
   #rbtns svg { width: 2.8vh; height: 2.8vh; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; }
   #recenter svg { stroke: #5aa9ff; }
-  #toMusic { left: max(2.6vw, env(safe-area-inset-left)); bottom: calc(max(2.6vh, env(safe-area-inset-bottom)) + 16vh);
+  #toMusic { left: max(2.6vw, env(safe-area-inset-left)); bottom: calc(max(2.6vh, env(safe-area-inset-bottom)) + 9vh);
     width: 6.4vh; height: 6.4vh; border: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; justify-content: center; }
   #toMusic svg { width: 3vh; height: 3vh; }
   #locNote { position: absolute; z-index: 500; left: 50%; transform: translateX(-50%); top: max(2.6vh, env(safe-area-inset-top));
@@ -276,8 +273,7 @@
   <button class="glass" id="toMusic" aria-label="Music page"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#1c1d1c" stroke="rgba(255,255,255,.5)" stroke-width="1"/><circle cx="12" cy="12" r="4" fill="#fff"/><circle cx="12" cy="12" r="1" fill="#0b0c0b"/></svg></button>
   <div class="glass" id="timeline">
     <button id="play" aria-label="Play the rain"><svg viewBox="0 0 24 24" id="playIco"><path d="M7 4.5v15l13-7.5z"/></svg></button>
-    <div id="scrubWrap"><div id="scrubTrack"></div><div id="nowMark"></div><div id="knob"><div id="knobLabel">Now</div></div></div>
-    <div id="hours"></div>
+    <div id="scrubWrap"><div id="scrubTrack"></div><div id="nowMark"></div><div id="knob"></div></div>
   </div>
 </div>
 
@@ -850,13 +846,22 @@ document.addEventListener("keydown", e => { if (e.key === "ArrowRight") setPage(
 $("toMusic").onclick = () => setPage(false);
 
 /* ---------- clock ---------- */
+/* When the drag bar is on "Now" the card shows the real time. Dragged away, it shows the time you're
+   looking at (in light blue) and how far away that is. */
+function viewing() { const fr = frames[cur]; return fr && !fr.now ? fr : null; }
 function tick() {
-  const d = new Date();
+  const v = viewing(), d = v ? v.t : new Date();
   let h = d.getHours(); const ap = h < 12 ? "AM" : "PM"; h = h % 12 || 12;
   $("clock").innerHTML = h + ":" + String(d.getMinutes()).padStart(2, "0") + "<small>" + ap + "</small>";
-  $("date").textContent = d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  const day = d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  if (!v) { $("date").textContent = day; $("wx").classList.remove("past", "fut"); return; }
+  const mins = Math.round((d - Date.now()) / MIN), a = Math.abs(mins);
+  const span = a < 60 ? a + " min" : (Math.round(a / 30) / 2) + (a < 90 ? " hour" : " hours");
+  $("date").innerHTML = '<span id="when"></span> · ' + day.replace(/^\w+, /, "");
+  $("when").textContent = mins < 0 ? "Radar " + span + " ago" : "Forecast in " + span;
+  $("wx").classList.toggle("past", mins < 0); $("wx").classList.toggle("fut", mins >= 0);
 }
-tick(); setInterval(tick, 1000);
+setTimeout(tick, 0); setInterval(tick, 1000);
 const hm = d => d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 const hShort = d => { let h = d.getHours(); const ap = h < 12 ? "a" : "p"; return (h % 12 || 12) + ap; };
 
@@ -952,7 +957,7 @@ function buildFrames() {
     frames.push({ t, m, key, fut: true });
   }
   if (cur === 0 || cur >= frames.length) cur = nowIdx;
-  drawScrub(); drawHours();
+  drawScrub();
 }
 /* Soft, smooth rain: the rain is drawn on its own see-through map laid over the road map and blurred
    (see #rain), so edges come out smooth with no tile seams. Each radar tile is also cleaned first:
@@ -1012,19 +1017,7 @@ function drawScrub() {
   $("scrubTrack").style.setProperty("--nowPct", pct(nowIdx) + "%");
   $("nowMark").style.left = pct(nowIdx) + "%";
   $("knob").style.left = pct(cur) + "%";
-  const fr = frames[cur];
-  $("knobLabel").textContent = fr.now ? "Now" : hm(fr.t);
-}
-function drawHours() {
-  const box = $("hours"); box.innerHTML = "";
-  frames.forEach((fr, i) => {
-    if (!(fr.now || (fr.fut && fr.m % 60 === 0))) return;
-    const w = hourWx(fr.t), el = document.createElement("div");
-    el.className = "hr"; el.style.left = pct(i) + "%";
-    el.innerHTML = (fr.now ? "Now" : hShort(new Date(fr.t.getTime() + 30 * MIN))) + "<b>" + (w ? Math.round(w.temp) + "°" : "") + "</b><em>" +
-      (w && w.pop >= 20 ? w.pop + "%" : "") + "</em>";
-    box.appendChild(el);
-  });
+  tick(); renderWx();                                   // the card shows the time you dragged to
 }
 function idxAt(x) { const r = wrap.getBoundingClientRect(); return Math.round(Math.max(0, Math.min(1, (x - r.left) / r.width)) * (frames.length - 1)); }
 let dragging = false;
@@ -1075,6 +1068,22 @@ function wmo(code, day) {
   return ["cloud", "—"];
 }
 const DIRS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+let live = null, days = [];
+/* Fill the card: right now, or the hour you dragged the bar to. */
+function renderWx() {
+  const v = viewing(), w = v ? hourWx(v.t) : live;
+  if (!w) return;
+  const [ic, txt] = wmo(w.code, w.day);
+  $("wxIcon").innerHTML = '<svg viewBox="0 0 24 24">' + ICONS[ic] + "</svg>";
+  $("temp").textContent = Math.round(w.temp) + "°";
+  $("cond").textContent = txt + (v && w.pop >= 20 ? " · " + w.pop + "% rain" : "");
+  const when = v ? v.t : new Date();
+  const dd = days.find(x => x.t.getDate() === when.getDate()) || days[0];
+  $("hilo").textContent = dd ? "H " + Math.round(dd.hi) + "°  ·  L " + Math.round(dd.lo) + "°" : "";
+  $("feels").textContent = Math.round(w.feels) + "°";
+  $("wind").textContent = Math.round(w.wind) + " mph " + DIRS[Math.round(w.dir / 45) % 8];
+  $("hum").textContent = Math.round(w.hum) + "%";
+}
 let wxBusy = false, wxAt = 0;
 async function refreshWeather() {
   if (wxBusy) return; wxBusy = true;
@@ -1082,24 +1091,23 @@ async function refreshWeather() {
   try {
     const q = "latitude=" + at[0].toFixed(2) + "&longitude=" + at[1].toFixed(2) +
       "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,is_day,precipitation" +
-      "&hourly=temperature_2m,precipitation_probability,precipitation,weather_code&daily=temperature_2m_max,temperature_2m_min" +
+      "&hourly=temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,wind_direction_10m,is_day,precipitation_probability,precipitation,weather_code" +
+      "&daily=temperature_2m_max,temperature_2m_min" +
       "&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto&forecast_days=2&timeformat=unixtime";
     const r = await fetch("https://api.open-meteo.com/v1/forecast?" + q);
     if (!r.ok) throw new Error(r.status);
     const j = await r.json(), c = j.current;
     lastWx = at; wxAt = Date.now();
-    const [ic, txt] = wmo(c.weather_code, c.is_day);
-    $("wxIcon").innerHTML = '<svg viewBox="0 0 24 24">' + ICONS[ic] + "</svg>";
-    $("temp").textContent = Math.round(c.temperature_2m) + "°";
-    $("cond").textContent = txt;
-    $("hilo").textContent = "H " + Math.round(j.daily.temperature_2m_max[0]) + "°  ·  L " + Math.round(j.daily.temperature_2m_min[0]) + "°";
-    $("feels").textContent = Math.round(c.apparent_temperature) + "°";
-    $("wind").textContent = Math.round(c.wind_speed_10m) + " mph " + DIRS[Math.round(c.wind_direction_10m / 45) % 8];
-    $("hum").textContent = Math.round(c.relative_humidity_2m) + "%";
-    hourly = j.hourly.time.map((t, i) => ({ t: new Date(t * 1000), temp: j.hourly.temperature_2m[i],
-      pop: j.hourly.precipitation_probability[i] || 0, mm: j.hourly.precipitation[i] || 0 }));
+    const H = j.hourly;
+    hourly = H.time.map((t, i) => ({ t: new Date(t * 1000), temp: H.temperature_2m[i], feels: H.apparent_temperature[i],
+      hum: H.relative_humidity_2m[i], wind: H.wind_speed_10m[i], dir: H.wind_direction_10m[i], day: H.is_day[i],
+      code: H.weather_code[i], pop: H.precipitation_probability[i] || 0, mm: H.precipitation[i] || 0 }));
+    live = { temp: c.temperature_2m, feels: c.apparent_temperature, hum: c.relative_humidity_2m, wind: c.wind_speed_10m,
+      dir: c.wind_direction_10m, day: c.is_day, code: c.weather_code };
+    days = j.daily.time.map((t, i) => ({ t: new Date(t * 1000), hi: j.daily.temperature_2m_max[i], lo: j.daily.temperature_2m_min[i] }));
+    renderWx();
     rainLine = rainText(c);
-    drawAlerts(); drawHours();
+    drawAlerts();
   } catch (e) { $("cond").textContent = "Weather needs internet"; }
   finally { wxBusy = false; }
 }
